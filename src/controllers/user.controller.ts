@@ -128,3 +128,68 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
     });
   }
 };
+
+export const updateUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { email, name, role } = req.body;
+
+    // Validar que sea un ObjectId válido
+    if (!isValidObjectId(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'ID de usuario inválido',
+      });
+      return;
+    }
+
+    // Si se actualiza el email, verificar que no exista en otro usuario
+    if (email) {
+      const existingUser = await User.findOne({
+        email,
+        _id: { $ne: id },
+      });
+
+      if (existingUser) {
+        res.status(400).json({
+          success: false,
+          message: 'El email ya está en uso por otro usuario',
+        });
+        return;
+      }
+    }
+
+    // Construir objeto de actualización solo con campos presentes
+    const updateData: any = {};
+    if (email !== undefined) updateData.email = email;
+    if (name !== undefined) updateData.name = name;
+    if (role !== undefined) updateData.role = role;
+
+    // Actualizar usuario
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!updatedUser) {
+      res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Usuario actualizado exitosamente',
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al actualizar usuario',
+    });
+  }
+};
