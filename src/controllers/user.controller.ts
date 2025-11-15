@@ -49,3 +49,40 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     });
   }
 };
+
+export const getUserById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Validar que sea un ObjectId válido
+    if (!isValidObjectId(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'ID de usuario inválido',
+      });
+      return;
+    }
+
+    // Buscar usuario
+    const user = await User.findById(id).select('-password');
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (error) {
+    console.error('Error al obtener usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener usuario',
+    });
+  }
+};
