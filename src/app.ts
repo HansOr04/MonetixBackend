@@ -6,17 +6,22 @@ import userRoutes from './routes/user.routes';
 const app = express();
 
 
+
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }));
 
 app.use(express.json());
-
-
 app.use(express.urlencoded({ extended: true }));
 
-// Ruta de prueba
+// Log simple de peticiones
+app.use((req: Request, res: Response, next: NextFunction) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+
 app.get('/', (req: Request, res: Response) => {
   res.json({
     success: true,
@@ -29,13 +34,10 @@ app.get('/', (req: Request, res: Response) => {
   });
 });
 
-// Rutas de autenticación
 app.use('/api/auth', authRoutes);
-
-// Rutas de usuarios
 app.use('/api/users', userRoutes);
 
-// Ruta no encontrada
+
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     success: false,
@@ -43,7 +45,6 @@ app.use((req: Request, res: Response) => {
   });
 });
 
-// Manejo de errores global
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({

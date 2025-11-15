@@ -3,7 +3,6 @@ import jwt, { Secret } from 'jsonwebtoken';
 import { User } from '../models/User.model';
 import { Types } from 'mongoose';
 
-// Función helper para obtener el JWT_SECRET
 const getJwtSecret = (): Secret => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -12,12 +11,10 @@ const getJwtSecret = (): Secret => {
   return secret as Secret;
 };
 
-// LOGIN
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // 1. Buscar usuario por email
     const user = await User.findOne({ email });
 
     if (!user) {
@@ -28,7 +25,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 2. Verificar password
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
@@ -39,7 +35,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 3. Generar JWT
     const token = jwt.sign(
       { 
         userId: (user._id as Types.ObjectId).toString(), 
@@ -49,7 +44,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: '7d' }
     );
 
-    // 4. Retornar respuesta exitosa
     res.status(200).json({
       success: true,
       message: 'Login exitoso',
@@ -72,12 +66,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// REGISTRO
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, name, role } = req.body;
 
-    // 1. Verificar si el email ya existe
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -88,7 +80,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 2. Crear nuevo usuario
     const user = new User({
       email,
       password,
@@ -98,7 +89,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     await user.save();
 
-    // 3. Generar JWT
     const token = jwt.sign(
       { 
         userId: (user._id as Types.ObjectId).toString(), 
@@ -108,7 +98,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       { expiresIn: '7d' }
     );
 
-    // 4. Retornar respuesta exitosa
     res.status(201).json({
       success: true,
       message: 'Usuario creado exitosamente',
@@ -131,7 +120,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// OBTENER USUARIO ACTUAL
 export const getCurrentUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user;
