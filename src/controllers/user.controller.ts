@@ -86,3 +86,45 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
     });
   }
 };
+
+export const createUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password, name, role } = req.body;
+
+    // Verificar si el email ya existe
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        message: 'El email ya está registrado',
+      });
+      return;
+    }
+
+    // Crear nuevo usuario
+    const user = new User({
+      email,
+      password,
+      name,
+      role: role || 'user',
+    });
+
+    await user.save();
+
+    // Obtener usuario sin password
+    const userWithoutPassword = await User.findById(user._id).select('-password');
+
+    res.status(201).json({
+      success: true,
+      message: 'Usuario creado exitosamente',
+      data: userWithoutPassword,
+    });
+  } catch (error) {
+    console.error('Error al crear usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al crear usuario',
+    });
+  }
+};
