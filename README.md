@@ -72,14 +72,6 @@ CORS_ORIGIN=http://localhost:5173
 NODE_ENV=development
 ```
 
-### 4. Inicializar Usuario Administrador
-
-Para crear el primer usuario administrador, ejecuta:
-
-```bash
-npm run seed:admin
-```
-
 ## Uso
 
 ### Modo Desarrollo
