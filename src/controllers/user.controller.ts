@@ -193,3 +193,56 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
     });
   }
 };
+
+export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Validar que sea un ObjectId válido
+    if (!isValidObjectId(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'ID de usuario inválido',
+      });
+      return;
+    }
+
+    // Buscar usuario a eliminar
+    const user = await User.findById(id);
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+      return;
+    }
+
+    // Si es admin, verificar que no sea el último
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+
+      if (adminCount === 1) {
+        res.status(400).json({
+          success: false,
+          message: 'No se puede eliminar el último administrador del sistema',
+        });
+        return;
+      }
+    }
+
+    // Eliminar usuario
+    await User.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Usuario eliminado exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al eliminar usuario:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al eliminar usuario',
+    });
+  }
+};
