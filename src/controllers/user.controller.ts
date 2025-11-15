@@ -246,3 +246,45 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
     });
   }
 };
+
+export const changePassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    // Validar que sea un ObjectId válido
+    if (!isValidObjectId(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'ID de usuario inválido',
+      });
+      return;
+    }
+
+    // Buscar usuario
+    const user = await User.findById(id);
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'Usuario no encontrado',
+      });
+      return;
+    }
+
+    // Asignar nueva contraseña (se hasheará automáticamente por el middleware)
+    user.password = password;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Contraseña actualizada exitosamente',
+    });
+  } catch (error) {
+    console.error('Error al cambiar contraseña:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al cambiar contraseña',
+    });
+  }
+};
