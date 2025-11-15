@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction, response } from 'express';
+import { Request, Response, NextFunction} from 'express';
 
 export const requiredAdmin = (req: Request, res: Response, next: NextFunction): void => {
     try{
@@ -19,7 +19,7 @@ export const requiredAdmin = (req: Request, res: Response, next: NextFunction): 
         }
 
         next();
-        
+
     }catch(error){
         console.error('Error en verificacion de admin', error);
         res.status(500).json({
