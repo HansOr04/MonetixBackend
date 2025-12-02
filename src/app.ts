@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import categoriesRoutes from './routes/category.routes';
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get('/', (req: Request, res: Response) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/categories', categoriesRoutes);
 
 
 app.use((req: Request, res: Response) => {
