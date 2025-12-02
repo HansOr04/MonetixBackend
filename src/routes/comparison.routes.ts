@@ -41,4 +41,11 @@ router.post(
     comparisonController.compareByPeriods.bind(comparisonController)
 );
 
+// Comparación entre dos categorías
+router.post(
+    '/compare-categories',
+    authenticate,
+    comparisonController.compareCategories.bind(comparisonController)
+);
+
 export default router;

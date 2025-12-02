@@ -2,12 +2,13 @@ import { Request, Response } from 'express';
 import { Transaction } from '../models/Transaction.model';
 import { Category } from '../models/Category.model';
 import { Goal } from '../models/Goal.model';
+import { predictionEngine } from '../core/PredictionEngine';
 import mongoose from 'mongoose';
 
 export class TransactionController {
-  async getTransactions(req: Request, res: Response): Promise<Response> {
+  async getTransactions(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
       const {
         type,
         categoryId,
@@ -19,7 +20,7 @@ export class TransactionController {
         limit = 20,
         sortBy = 'date',
         sortOrder = 'desc',
-      } = req.query;
+      } = request.query;
 
       const filter: any = { userId };
 
@@ -51,7 +52,7 @@ export class TransactionController {
 
       const total = await Transaction.countDocuments(filter);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: transactions,
         pagination: {
@@ -63,7 +64,7 @@ export class TransactionController {
       });
     } catch (error) {
       console.error('Error al obtener transacciones:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener transacciones',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -71,13 +72,13 @@ export class TransactionController {
     }
   }
 
-  async getTransactionById(req: Request, res: Response): Promise<Response> {
+  async getTransactionById(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de transacción inválido',
         });
@@ -88,19 +89,19 @@ export class TransactionController {
         .lean();
 
       if (!transaction) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Transacción no encontrada',
         });
       }
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: transaction,
       });
     } catch (error) {
       console.error('Error al obtener transacción:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener transacción',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -108,10 +109,10 @@ export class TransactionController {
     }
   }
 
-  async createTransaction(req: Request, res: Response): Promise<Response> {
+  async createTransaction(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { categoryId, amount, type, description, date } = req.body;
+      const userId = request.user?.id;
+      const { categoryId, amount, type, description, date } = request.body;
 
       const category = await Category.findOne({
         _id: categoryId,
@@ -119,7 +120,7 @@ export class TransactionController {
       });
 
       if (!category) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Categoría no encontrada',
         });
@@ -147,14 +148,17 @@ export class TransactionController {
         .populate('categoryId', 'name type icon color')
         .lean();
 
-      return res.status(201).json({
+      // Invalidate prediction cache
+      predictionEngine.invalidateCache(userId!);
+
+      return response.status(201).json({
         success: true,
         message: 'Transacción creada exitosamente',
         data: populatedTransaction,
       });
     } catch (error) {
       console.error('Error al crear transacción:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al crear transacción',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -162,14 +166,14 @@ export class TransactionController {
     }
   }
 
-  async updateTransaction(req: Request, res: Response): Promise<Response> {
+  async updateTransaction(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      const updateData = req.body;
+      const { id } = request.params;
+      const userId = request.user?.id;
+      const updateData = request.body;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de transacción inválido',
         });
@@ -182,7 +186,7 @@ export class TransactionController {
         });
 
         if (!category) {
-          return res.status(404).json({
+          return response.status(404).json({
             success: false,
             message: 'Categoría no encontrada',
           });
@@ -196,20 +200,23 @@ export class TransactionController {
       ).populate('categoryId', 'name type icon color');
 
       if (!transaction) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Transacción no encontrada',
         });
       }
 
-      return res.status(200).json({
+      // Invalidate prediction cache
+      predictionEngine.invalidateCache(userId!);
+
+      return response.status(200).json({
         success: true,
         message: 'Transacción actualizada exitosamente',
         data: transaction,
       });
     } catch (error) {
       console.error('Error al actualizar transacción:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al actualizar transacción',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -217,13 +224,13 @@ export class TransactionController {
     }
   }
 
-  async deleteTransaction(req: Request, res: Response): Promise<Response> {
+  async deleteTransaction(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de transacción inválido',
         });
@@ -232,13 +239,16 @@ export class TransactionController {
       const transaction = await Transaction.findOneAndDelete({ _id: id, userId });
 
       if (!transaction) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Transacción no encontrada',
         });
       }
 
-      return res.status(200).json({
+      // Invalidate prediction cache
+      predictionEngine.invalidateCache(userId!);
+
+      return response.status(200).json({
         success: true,
         message: 'Transacción eliminada exitosamente',
         data: {
@@ -249,7 +259,7 @@ export class TransactionController {
       });
     } catch (error) {
       console.error('Error al eliminar transacción:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al eliminar transacción',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -257,9 +267,9 @@ export class TransactionController {
     }
   }
 
-  async getStatistics(req: Request, res: Response): Promise<Response> {
+  async getStatistics(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const stats = await Transaction.aggregate([
         { $match: { userId: new mongoose.Types.ObjectId(userId) } },
@@ -276,7 +286,7 @@ export class TransactionController {
       const incomeStats = stats.find(s => s._id === 'income') || { total: 0, count: 0, avg: 0 };
       const expenseStats = stats.find(s => s._id === 'expense') || { total: 0, count: 0, avg: 0 };
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: {
           income: {
@@ -295,7 +305,7 @@ export class TransactionController {
       });
     } catch (error) {
       console.error('Error al obtener estadísticas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener estadísticas',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -303,9 +313,9 @@ export class TransactionController {
     }
   }
 
-  async getByCategory(req: Request, res: Response): Promise<Response> {
+  async getByCategory(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const byCategory = await Transaction.aggregate([
         { $match: { userId: new mongoose.Types.ObjectId(userId) } },
@@ -339,13 +349,13 @@ export class TransactionController {
         { $sort: { total: -1 } },
       ]);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: byCategory,
       });
     } catch (error) {
       console.error('Error al obtener transacciones por categoría:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener transacciones por categoría',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -353,10 +363,10 @@ export class TransactionController {
     }
   }
 
-  async getByPeriod(req: Request, res: Response): Promise<Response> {
+  async getByPeriod(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { period = 'month' } = req.query;
+      const userId = request.user?.id;
+      const { period = 'month' } = request.query;
 
       let groupBy: any;
       switch (period) {
@@ -384,13 +394,13 @@ export class TransactionController {
         { $sort: { '_id.period': 1 } },
       ]);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: byPeriod,
       });
     } catch (error) {
       console.error('Error al obtener transacciones por período:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener transacciones por período',
         error: error instanceof Error ? error.message : 'Error desconocido',

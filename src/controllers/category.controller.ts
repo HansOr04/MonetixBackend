@@ -10,10 +10,10 @@ export class CategoryController {
    * Obtener todas las categorías
    * GET /api/v1/categories
    */
-  async getAllCategories(req: Request, res: Response): Promise<Response> {
+  async getAllCategories(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { type, isDefault, search } = req.query;
+      const userId = request.user?.id;
+      const { type, isDefault, search } = request.query;
 
       // Construir filtro dinámico
       const filter: any = {
@@ -41,7 +41,7 @@ export class CategoryController {
 
       const categories = await Category.find(filter).sort({ type: 1, name: 1 });
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Categorías obtenidas exitosamente',
         data: categories,
@@ -49,7 +49,7 @@ export class CategoryController {
       });
     } catch (error) {
       console.error('Error al obtener categorías:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener categorías',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -61,14 +61,14 @@ export class CategoryController {
    * Obtener una categoría por ID
    * GET /api/v1/categories/:id
    */
-  async getCategoryById(req: Request, res: Response): Promise<Response> {
+  async getCategoryById(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de categoría inválido',
         });
@@ -80,20 +80,20 @@ export class CategoryController {
       });
 
       if (!category) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Categoría no encontrada',
         });
       }
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Categoría obtenida exitosamente',
         data: category,
       });
     } catch (error) {
       console.error('Error al obtener categoría:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener categoría',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -105,41 +105,53 @@ export class CategoryController {
    * Crear una nueva categoría
    * POST /api/v1/categories
    */
-  async createCategory(req: Request, res: Response): Promise<Response> {
+  async createCategory(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { name, type, icon, color, description } = req.body;
+      const userId = request.user?.id;
+      const userRole = request.user?.role;
+      const { name, type, icon, color, description } = request.body;
 
-      // Verificar si ya existe una categoría con el mismo nombre y tipo para este usuario
+      // Determinar si el usuario es administrador
+      const isAdmin = userRole === 'admin';
+
+      // Verificar si ya existe una categoría con el mismo nombre y tipo
+      // Para admins: verificar solo categorías del sistema
+      // Para usuarios: verificar categorías del sistema y propias
       const existingCategory = await Category.findOne({
         name: { $regex: new RegExp(`^${name}$`, 'i') },
         type,
-        $or: [{ isDefault: true }, { userId: userId }],
+        $or: isAdmin
+          ? [{ isDefault: true }] // Admin: solo verificar categorías del sistema
+          : [{ isDefault: true }, { userId: userId }], // Usuario: verificar sistema y propias
       });
 
       if (existingCategory) {
-        return res.status(409).json({
+        return response.status(409).json({
           success: false,
           message: `Ya existe una categoría "${name}" de tipo "${type}"`,
         });
       }
 
       // Crear nueva categoría
+      // Si es admin: categoría del sistema (isDefault: true, userId: null)
+      // Si es usuario: categoría personal (isDefault: false, userId: suId)
       const category = new Category({
         name,
         type,
         icon: icon || '💰',
         color: color || '#6D9C71',
         description,
-        userId: userId,
-        isDefault: false,
+        userId: isAdmin ? null : userId,
+        isDefault: isAdmin ? true : false,
       });
 
       await category.save();
 
-      return res.status(201).json({
+      return response.status(201).json({
         success: true,
-        message: 'Categoría creada exitosamente',
+        message: isAdmin
+          ? 'Categoría del sistema creada exitosamente'
+          : 'Categoría personal creada exitosamente',
         data: category,
       });
     } catch (error) {
@@ -147,13 +159,13 @@ export class CategoryController {
 
       // Error de duplicado (aunque ya lo manejamos arriba)
       if (error instanceof Error && 'code' in error && (error as any).code === 11000) {
-        return res.status(409).json({
+        return response.status(409).json({
           success: false,
           message: 'Ya existe una categoría con ese nombre y tipo',
         });
       }
 
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al crear categoría',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -165,15 +177,15 @@ export class CategoryController {
    * Actualizar una categoría
    * PUT /api/v1/categories/:id
    */
-  async updateCategory(req: Request, res: Response): Promise<Response> {
+  async updateCategory(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      const updateData = req.body;
+      const { id } = request.params;
+      const userId = request.user?.id;
+      const updateData = request.body;
 
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de categoría inválido',
         });
@@ -186,7 +198,7 @@ export class CategoryController {
       });
 
       if (!category) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Categoría no encontrada o no tienes permiso para modificarla',
         });
@@ -194,7 +206,7 @@ export class CategoryController {
 
       // No permitir actualizar categorías del sistema
       if (category.isDefault) {
-        return res.status(403).json({
+        return response.status(403).json({
           success: false,
           message: 'No puedes modificar categorías predeterminadas del sistema',
         });
@@ -213,7 +225,7 @@ export class CategoryController {
         });
 
         if (existingCategory) {
-          return res.status(409).json({
+          return response.status(409).json({
             success: false,
             message: `Ya existe otra categoría "${checkName}" de tipo "${checkType}"`,
           });
@@ -224,14 +236,14 @@ export class CategoryController {
       Object.assign(category, updateData);
       await category.save();
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Categoría actualizada exitosamente',
         data: category,
       });
     } catch (error) {
       console.error('Error al actualizar categoría:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al actualizar categoría',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -243,14 +255,14 @@ export class CategoryController {
    * Eliminar una categoría (soft delete)
    * DELETE /api/v1/categories/:id
    */
-  async deleteCategory(req: Request, res: Response): Promise<Response> {
+  async deleteCategory(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       // Validar ObjectId
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de categoría inválido',
         });
@@ -263,7 +275,7 @@ export class CategoryController {
       });
 
       if (!category) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Categoría no encontrada o no tienes permiso para eliminarla',
         });
@@ -271,7 +283,7 @@ export class CategoryController {
 
       // No permitir eliminar categorías del sistema
       if (category.isDefault) {
-        return res.status(403).json({
+        return response.status(403).json({
           success: false,
           message: 'No puedes eliminar categorías predeterminadas del sistema',
         });
@@ -283,7 +295,7 @@ export class CategoryController {
       // Eliminar la categoría
       await Category.deleteOne({ _id: id });
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Categoría eliminada exitosamente',
         data: {
@@ -293,7 +305,7 @@ export class CategoryController {
       });
     } catch (error) {
       console.error('Error al eliminar categoría:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al eliminar categoría',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -305,9 +317,9 @@ export class CategoryController {
    * Obtener estadísticas de categorías
    * GET /api/v1/categories/stats
    */
-  async getCategoryStats(req: Request, res: Response): Promise<Response> {
+  async getCategoryStats(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const totalCategories = await Category.countDocuments({
         $or: [{ isDefault: true }, { userId: userId }],
@@ -328,7 +340,7 @@ export class CategoryController {
         isDefault: false,
       });
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Estadísticas obtenidas exitosamente',
         data: {
@@ -341,7 +353,7 @@ export class CategoryController {
       });
     } catch (error) {
       console.error('Error al obtener estadísticas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener estadísticas',
         error: error instanceof Error ? error.message : 'Error desconocido',

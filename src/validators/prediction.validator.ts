@@ -21,6 +21,13 @@ export const generatePredictionSchema = Joi.object({
       'number.min': 'Debe predecir al menos 1 período',
       'number.max': 'No se pueden predecir más de 12 períodos',
     }),
+
+  type: Joi.string()
+    .valid('income', 'expense', 'net')
+    .optional()
+    .messages({
+      'any.only': 'El tipo debe ser: income, expense o net',
+    }),
 });
 
 export const comparePredictionsSchema = Joi.object({

@@ -2,12 +2,12 @@ import { Request, Response } from 'express';
 import { User } from '../models/User.model';
 import { Types, isValidObjectId } from 'mongoose';
 
-export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
+export const getAllUsers = async (request: Request, response: Response): Promise<void> => {
   try {
     // Extraer parámetros de query
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const role = req.query.role as string;
+    const page = parseInt(request.query.page as string) || 1;
+    const limit = parseInt(request.query.limit as string) || 10;
+    const role = request.query.role as string;
 
     // Construir filtro
     const filter: any = {};
@@ -31,7 +31,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     // Calcular total de páginas
     const totalPages = Math.ceil(total / limit);
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       data: users,
       pagination: {
@@ -43,20 +43,20 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     });
   } catch (error) {
     console.error('Error al obtener usuarios:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al obtener usuarios',
     });
   }
 };
 
-export const getUserById = async (req: Request, res: Response): Promise<void> => {
+export const getUserById = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = request.params;
 
     // Validar que sea un ObjectId válido
     if (!isValidObjectId(id)) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'ID de usuario inválido',
       });
@@ -67,35 +67,35 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
     const user = await User.findById(id).select('-password');
 
     if (!user) {
-      res.status(404).json({
+      response.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       });
       return;
     }
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       data: user,
     });
   } catch (error) {
     console.error('Error al obtener usuario:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al obtener usuario',
     });
   }
 };
 
-export const createUser = async (req: Request, res: Response): Promise<void> => {
+export const createUser = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role } = request.body;
 
     // Verificar si el email ya existe
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'El email ya está registrado',
       });
@@ -115,28 +115,28 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
     // Obtener usuario sin password
     const userWithoutPassword = await User.findById(user._id).select('-password');
 
-    res.status(201).json({
+    response.status(201).json({
       success: true,
       message: 'Usuario creado exitosamente',
       data: userWithoutPassword,
     });
   } catch (error) {
     console.error('Error al crear usuario:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al crear usuario',
     });
   }
 };
 
-export const updateUser = async (req: Request, res: Response): Promise<void> => {
+export const updateUser = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const { email, name, role } = req.body;
+    const { id } = request.params;
+    const { email, name, role } = request.body;
 
     // Validar que sea un ObjectId válido
     if (!isValidObjectId(id)) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'ID de usuario inválido',
       });
@@ -151,7 +151,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
       });
 
       if (existingUser) {
-        res.status(400).json({
+        response.status(400).json({
           success: false,
           message: 'El email ya está en uso por otro usuario',
         });
@@ -173,34 +173,34 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
     ).select('-password');
 
     if (!updatedUser) {
-      res.status(404).json({
+      response.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       });
       return;
     }
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       message: 'Usuario actualizado exitosamente',
       data: updatedUser,
     });
   } catch (error) {
     console.error('Error al actualizar usuario:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al actualizar usuario',
     });
   }
 };
 
-export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+export const deleteUser = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = request.params;
 
     // Validar que sea un ObjectId válido
     if (!isValidObjectId(id)) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'ID de usuario inválido',
       });
@@ -211,7 +211,7 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
     const user = await User.findById(id);
 
     if (!user) {
-      res.status(404).json({
+      response.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       });
@@ -223,7 +223,7 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
       const adminCount = await User.countDocuments({ role: 'admin' });
 
       if (adminCount === 1) {
-        res.status(400).json({
+        response.status(400).json({
           success: false,
           message: 'No se puede eliminar el último administrador del sistema',
         });
@@ -234,27 +234,27 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
     // Eliminar usuario
     await User.findByIdAndDelete(id);
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       message: 'Usuario eliminado exitosamente',
     });
   } catch (error) {
     console.error('Error al eliminar usuario:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al eliminar usuario',
     });
   }
 };
 
-export const changePassword = async (req: Request, res: Response): Promise<void> => {
+export const changePassword = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const { password } = req.body;
+    const { id } = request.params;
+    const { password } = request.body;
 
     // Validar que sea un ObjectId válido
     if (!isValidObjectId(id)) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'ID de usuario inválido',
       });
@@ -265,7 +265,7 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     const user = await User.findById(id);
 
     if (!user) {
-      res.status(404).json({
+      response.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       });
@@ -276,13 +276,13 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     user.password = password;
     await user.save();
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       message: 'Contraseña actualizada exitosamente',
     });
   } catch (error) {
     console.error('Error al cambiar contraseña:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al cambiar contraseña',
     });
