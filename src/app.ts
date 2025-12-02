@@ -3,10 +3,13 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import categoriesRoutes from './routes/category.routes';
+import transactionRoutes from './routes/transaction.routes';
+import goalRoutes from './routes/goal.routes';
+import predictionRoutes from './routes/prediction.routes';
+import alertRoutes from './routes/alert.routes';
+import comparisonRoutes from './routes/comparison.routes';
 
 const app = express();
-
-
 
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -22,7 +25,6 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-
 app.get('/', (req: Request, res: Response) => {
   res.json({
     success: true,
@@ -31,14 +33,27 @@ app.get('/', (req: Request, res: Response) => {
     endpoints: {
       auth: '/api/auth',
       users: '/api/users',
+      categories: '/api/categories',
+      transactions: '/api/transactions',
+      goals: '/api/goals',
+      predictions: '/api/predictions',
+      alerts: '/api/alerts',
+      comparisons: '/api/comparisons',
     },
   });
 });
 
+// Rutas de administración
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/categories', categoriesRoutes);
 
+// Rutas del core
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/predictions', predictionRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/comparisons', comparisonRoutes);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({
