@@ -12,9 +12,9 @@ export interface IModelMetadata {
   parameters?: Record<string, any>;
   training_samples?: number;
   r_squared?: number;
-  mape?: number;
-  mae?: number;
-  rmse?: number;
+  meanAbsolutePercentageError?: number;
+  meanAbsoluteError?: number;
+  rootMeanSquaredError?: number;
   [key: string]: any;
 }
 
@@ -22,6 +22,7 @@ export interface IPrediction extends Document {
   _id: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   modelType: 'linear_regression';
+  type: 'income' | 'expense' | 'net';
   predictions: IPredictionPoint[];
   confidence: number;
   metadata: IModelMetadata;
@@ -69,6 +70,12 @@ const predictionSchema = new Schema<IPrediction>(
       },
       index: true,
     },
+    type: {
+      type: String,
+      enum: ['income', 'expense', 'net'],
+      default: 'net',
+      index: true,
+    },
     predictions: {
       type: [predictionPointSchema],
       required: [true, 'Las predicciones son requeridas'],
@@ -98,7 +105,7 @@ const predictionSchema = new Schema<IPrediction>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
+
     },
   },
   {
@@ -107,7 +114,7 @@ const predictionSchema = new Schema<IPrediction>(
   }
 );
 
-predictionSchema.index({ userId: 1, modelType: 1, generatedAt: -1 });
+predictionSchema.index({ userId: 1, modelType: 1, type: 1, generatedAt: -1 });
 predictionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 predictionSchema.pre('save', function (next) {
@@ -125,6 +132,7 @@ predictionSchema.methods.toJSON = function () {
     id: prediction._id,
     userId: prediction.userId,
     modelType: prediction.modelType,
+    type: prediction.type,
     predictions: prediction.predictions,
     confidence: prediction.confidence,
     metadata: prediction.metadata,

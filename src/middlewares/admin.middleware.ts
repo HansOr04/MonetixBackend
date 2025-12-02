@@ -1,17 +1,17 @@
-import { Request, Response, NextFunction} from 'express';
+import { Request, Response, NextFunction } from 'express';
 
-export const requiredAdmin = (req: Request, res: Response, next: NextFunction): void => {
-    try{
-        const user = req.user;
-        if(!user){
-            res.status(401).json({
+export const requiredAdmin = (request: Request, response: Response, next: NextFunction): void => {
+    try {
+        const user = request.user;
+        if (!user) {
+            response.status(401).json({
                 success: false,
                 message: 'Usuario no autenticado'
             });
             return;
         }
-        if(user.role !== 'admin'){
-            res.status(403).json({
+        if (user.role !== 'admin') {
+            response.status(403).json({
                 success: false,
                 message: 'Acceso degenado'
             });
@@ -20,11 +20,11 @@ export const requiredAdmin = (req: Request, res: Response, next: NextFunction): 
 
         next();
 
-    }catch(error){
+    } catch (error) {
         console.error('Error en verificacion de admin', error);
-        res.status(500).json({
+        response.status(500).json({
             success: false,
-                message: 'Error en verificar permisos'
+            message: 'Error en verificar permisos'
         });
     }
 };

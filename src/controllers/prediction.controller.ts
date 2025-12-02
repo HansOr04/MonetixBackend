@@ -3,14 +3,14 @@ import { predictionEngine } from '../core/PredictionEngine';
 import { Prediction } from '../models/Prediction.model';
 
 export class PredictionController {
-  async generatePrediction(req: Request, res: Response): Promise<Response> {
+  async generatePrediction(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { modelType, periods = 6 } = req.body;
+      const userId = request.user?.id;
+      const { modelType, periods = 6, type } = request.body;
 
-      const prediction = await predictionEngine.predict(userId!, modelType, periods);
+      const prediction = await predictionEngine.predict(userId!, modelType, periods, type);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Predicción generada exitosamente',
         data: prediction,
@@ -19,13 +19,13 @@ export class PredictionController {
       console.error('Error al generar predicción:', error);
 
       if (error instanceof Error && error.message.includes('al menos 30')) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: error.message,
         });
       }
 
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al generar predicción',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -33,10 +33,10 @@ export class PredictionController {
     }
   }
 
-  async getPredictions(req: Request, res: Response): Promise<Response> {
+  async getPredictions(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { modelType, limit = 10 } = req.query;
+      const userId = request.user?.id;
+      const { modelType, limit = 10 } = request.query;
 
       const filter: any = { userId };
       if (modelType) filter.modelType = modelType;
@@ -46,14 +46,14 @@ export class PredictionController {
         .limit(Number(limit))
         .lean();
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: predictions,
         total: predictions.length,
       });
     } catch (error) {
       console.error('Error al obtener predicciones:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener predicciones',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -63,19 +63,19 @@ export class PredictionController {
 
 
 
-  async getInsights(req: Request, res: Response): Promise<Response> {
+  async getInsights(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const insights = await predictionEngine.generateInsights(userId!);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: insights,
       });
     } catch (error) {
       console.error('Error al generar insights:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al generar insights',
         error: error instanceof Error ? error.message : 'Error desconocido',

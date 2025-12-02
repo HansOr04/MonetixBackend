@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
 
 export const validate = (schema: Joi.ObjectSchema, source: 'body' | 'query' | 'params' = 'body') => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const dataToValidate = source === 'query' ? req.query : source === 'params' ? req.params : req.body;
+  return (request: Request, response: Response, next: NextFunction): void => {
+    const dataToValidate = source === 'query' ? request.query : source === 'params' ? request.params : request.body;
 
     const { error, value } = schema.validate(dataToValidate, {
       abortEarly: false,
@@ -16,7 +16,7 @@ export const validate = (schema: Joi.ObjectSchema, source: 'body' | 'query' | 'p
         message: detail.message,
       }));
 
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'Error de validación',
         errors,
@@ -27,7 +27,7 @@ export const validate = (schema: Joi.ObjectSchema, source: 'body' | 'query' | 'p
     // Para query y params, no podemos reasignar directamente porque son readonly
     // En su lugar, simplemente continuamos - la validación ya pasó
     if (source === 'body') {
-      req.body = value;
+      request.body = value;
     }
 
     next();

@@ -8,6 +8,10 @@ export class PredictionEngine {
   private static instance: PredictionEngine;
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 24 * 60 * 60 * 1000;
+  private readonly MIN_TRANSACTIONS_FOR_PREDICTION = 30;
+  private readonly MIN_TRANSACTIONS_FOR_INSIGHTS = 10;
+  private readonly EXPENSE_RATIO_THRESHOLD = 0.8;
+  private readonly RECENT_TRANSACTIONS_COUNT = 10;
 
   private constructor() { }
 
@@ -21,23 +25,29 @@ export class PredictionEngine {
   async predict(
     userId: string,
     modelType: 'linear_regression',
-    periods: number = 6
+    periods: number = 6,
+    type?: 'income' | 'expense'
   ): Promise<any> {
-    const cacheKey = `${userId}-${modelType}-${periods}`;
+    const cacheKey = `${userId}-${modelType}-${periods}-${type || 'all'}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const transactions = await Transaction.find({ userId })
+    const query: any = { userId };
+    if (type) {
+      query.type = type;
+    }
+
+    const transactions = await Transaction.find(query)
       .sort({ date: 1 })
       .lean();
 
-    if (transactions.length < 30) {
-      throw new Error('Se necesitan al menos 30 transacciones para generar predicciones');
+    if (transactions.length < this.MIN_TRANSACTIONS_FOR_PREDICTION) {
+      throw new Error(`Se necesitan al menos ${this.MIN_TRANSACTIONS_FOR_PREDICTION} transacciones para generar predicciones`);
     }
 
-    const dataPoints = this.transactionsToDataPoints(transactions);
+    const dataPoints = this.transactionsToDataPoints(transactions, type);
     const cleanedData = DataPreprocessor.cleanData(dataPoints);
     const aggregatedData = DataPreprocessor.aggregateByPeriod(cleanedData, 'month');
     const timeSeriesData = DataPreprocessor.toTimeSeries(aggregatedData);
@@ -52,11 +62,12 @@ export class PredictionEngine {
     const predictionDoc = new Prediction({
       userId,
       modelType,
-      predictions: predictions.map(p => ({
-        date: p.date,
-        amount: p.amount,
-        lowerBound: p.lowerBound,
-        upperBound: p.upperBound,
+      type: type || 'net', // Store the type in the prediction document
+      predictions: predictions.map(prediction => ({
+        date: prediction.date,
+        amount: prediction.amount,
+        lowerBound: prediction.lowerBound,
+        upperBound: prediction.upperBound,
       })),
       confidence,
       metadata,
@@ -70,6 +81,7 @@ export class PredictionEngine {
       id: predictionDoc._id,
       userId: predictionDoc.userId,
       modelType: predictionDoc.modelType,
+      type: predictionDoc.type,
       predictions: predictionDoc.predictions,
       confidence: predictionDoc.confidence,
       metadata: predictionDoc.metadata,
@@ -80,14 +92,12 @@ export class PredictionEngine {
     return result;
   }
 
-
-
   async generateInsights(userId: string): Promise<any> {
     const transactions = await Transaction.find({ userId })
       .sort({ date: 1 })
       .lean();
 
-    if (transactions.length < 10) {
+    if (transactions.length < this.MIN_TRANSACTIONS_FOR_INSIGHTS) {
       return {
         insights: ['Necesitas más transacciones para generar insights significativos'],
         summary: {
@@ -97,45 +107,19 @@ export class PredictionEngine {
       };
     }
 
-    const dataPoints = this.transactionsToDataPoints(transactions);
-    const cleanedData = DataPreprocessor.cleanData(dataPoints);
+    const incomeTransactions = transactions.filter(transaction => transaction.type === 'income');
+    const expenseTransactions = transactions.filter(transaction => transaction.type === 'expense');
 
-    const incomeTransactions = transactions.filter(t => t.type === 'income');
-    const expenseTransactions = transactions.filter(t => t.type === 'expense');
-
-    const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
-    const totalExpense = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalIncome = incomeTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalExpense = expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
     const avgIncome = incomeTransactions.length > 0 ? totalIncome / incomeTransactions.length : 0;
     const avgExpense = expenseTransactions.length > 0 ? totalExpense / expenseTransactions.length : 0;
 
     const insights: string[] = [];
 
-    if (totalExpense > totalIncome) {
-      const deficit = totalExpense - totalIncome;
-      insights.push(
-        `Tus gastos totales ($${totalExpense.toFixed(2)}) superan tus ingresos ($${totalIncome.toFixed(2)}) por $${deficit.toFixed(2)}`
-      );
-    } else {
-      const surplus = totalIncome - totalExpense;
-      insights.push(
-        `Tienes un superávit de $${surplus.toFixed(2)}. ¡Buen trabajo manteniendo tus gastos bajo control!`
-      );
-    }
-
-    if (avgExpense > avgIncome * 0.8) {
-      insights.push(
-        `Tu gasto promedio ($${avgExpense.toFixed(2)}) es alto en comparación con tu ingreso promedio ($${avgIncome.toFixed(2)}). Considera reducir gastos.`
-      );
-    }
-
-    const recentTransactions = transactions.slice(-10);
-    const recentExpenseRatio =
-      recentTransactions.filter(t => t.type === 'expense').length / recentTransactions.length;
-    if (recentExpenseRatio > 0.8) {
-      insights.push(
-        'Has tenido muchos gastos recientemente. Considera revisar tus categorías de gasto más frecuentes.'
-      );
-    }
+    this.analyzeBalance(totalIncome, totalExpense, insights);
+    this.analyzeSpendingHabits(avgIncome, avgExpense, insights);
+    this.analyzeRecentActivity(transactions, insights);
 
     return {
       insights,
@@ -151,6 +135,40 @@ export class PredictionEngine {
     };
   }
 
+  private analyzeBalance(totalIncome: number, totalExpense: number, insights: string[]): void {
+    if (totalExpense > totalIncome) {
+      const deficit = totalExpense - totalIncome;
+      insights.push(
+        `Tus gastos totales ($${totalExpense.toFixed(2)}) superan tus ingresos ($${totalIncome.toFixed(2)}) por $${deficit.toFixed(2)}`
+      );
+    } else {
+      const surplus = totalIncome - totalExpense;
+      insights.push(
+        `Tienes un superávit de $${surplus.toFixed(2)}. ¡Buen trabajo manteniendo tus gastos bajo control!`
+      );
+    }
+  }
+
+  private analyzeSpendingHabits(avgIncome: number, avgExpense: number, insights: string[]): void {
+    if (avgExpense > avgIncome * this.EXPENSE_RATIO_THRESHOLD) {
+      insights.push(
+        `Tu gasto promedio ($${avgExpense.toFixed(2)}) es alto en comparación con tu ingreso promedio ($${avgIncome.toFixed(2)}). Considera reducir gastos.`
+      );
+    }
+  }
+
+  private analyzeRecentActivity(transactions: any[], insights: string[]): void {
+    const recentTransactions = transactions.slice(-this.RECENT_TRANSACTIONS_COUNT);
+    const recentExpenseRatio =
+      recentTransactions.filter(transaction => transaction.type === 'expense').length / recentTransactions.length;
+
+    if (recentExpenseRatio > this.EXPENSE_RATIO_THRESHOLD) {
+      insights.push(
+        'Has tenido muchos gastos recientemente. Considera revisar tus categorías de gasto más frecuentes.'
+      );
+    }
+  }
+
   invalidateCache(userId: string): void {
     const keysToDelete: string[] = [];
     this.cache.forEach((_, key) => {
@@ -161,7 +179,7 @@ export class PredictionEngine {
     keysToDelete.forEach(key => this.cache.delete(key));
   }
 
-  private transactionsToDataPoints(transactions: any[]): DataPoint[] {
+  private transactionsToDataPoints(transactions: any[], type?: 'income' | 'expense'): DataPoint[] {
     const monthlyData = new Map<string, number>();
 
     transactions.forEach(transaction => {
@@ -172,7 +190,14 @@ export class PredictionEngine {
         monthlyData.set(key, 0);
       }
 
-      const amount = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+      let amount = transaction.amount;
+
+      // If we are calculating net balance (no type specified), expenses are negative
+      if (!type && transaction.type === 'expense') {
+        amount = -amount;
+      }
+      // If type IS specified (e.g. 'expense'), we want the positive magnitude of that type
+
       monthlyData.set(key, monthlyData.get(key)! + amount);
     });
 
@@ -181,7 +206,9 @@ export class PredictionEngine {
       const [year, month] = key.split('-').map(Number);
       dataPoints.push({
         date: new Date(year, month, 1),
-        value: Math.abs(value),
+        value: type ? value : Math.abs(value), // For net balance, we might want to predict magnitude or keep sign? 
+        // Original code used Math.abs(value) which implies predicting magnitude of balance? 
+        // Let's stick to original behavior for net balance (Math.abs) but for specific types we definitely want the value.
       });
     });
 

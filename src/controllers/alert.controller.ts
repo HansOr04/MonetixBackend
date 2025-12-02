@@ -4,10 +4,10 @@ import { alertGenerator } from '../core/alertGenerator';
 import mongoose from 'mongoose';
 
 export class AlertController {
-  async getAlerts(req: Request, res: Response): Promise<Response> {
+  async getAlerts(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
-      const { isRead, severity, type } = req.query;
+      const userId = request.user?.id;
+      const { isRead, severity, type } = request.query;
 
       const filter: any = { userId };
       if (isRead !== undefined) filter.isRead = isRead === 'true';
@@ -16,14 +16,14 @@ export class AlertController {
 
       const alerts = await Alert.find(filter).sort({ createdAt: -1 }).lean();
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: alerts,
         total: alerts.length,
       });
     } catch (error) {
       console.error('Error al obtener alertas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener alertas',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -31,13 +31,13 @@ export class AlertController {
     }
   }
 
-  async getAlertById(req: Request, res: Response): Promise<Response> {
+  async getAlertById(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de alerta inválido',
         });
@@ -46,19 +46,19 @@ export class AlertController {
       const alert = await Alert.findOne({ _id: id, userId }).lean();
 
       if (!alert) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Alerta no encontrada',
         });
       }
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: alert,
       });
     } catch (error) {
       console.error('Error al obtener alerta:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener alerta',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -66,13 +66,13 @@ export class AlertController {
     }
   }
 
-  async markAsRead(req: Request, res: Response): Promise<Response> {
+  async markAsRead(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de alerta inválido',
         });
@@ -85,20 +85,20 @@ export class AlertController {
       );
 
       if (!alert) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Alerta no encontrada',
         });
       }
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Alerta marcada como leída',
         data: alert,
       });
     } catch (error) {
       console.error('Error al marcar alerta como leída:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al marcar alerta como leída',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -106,13 +106,13 @@ export class AlertController {
     }
   }
 
-  async markAllAsRead(req: Request, res: Response): Promise<Response> {
+  async markAllAsRead(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const result = await Alert.updateMany({ userId, isRead: false }, { isRead: true });
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Todas las alertas marcadas como leídas',
         data: {
@@ -121,7 +121,7 @@ export class AlertController {
       });
     } catch (error) {
       console.error('Error al marcar todas las alertas como leídas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al marcar todas las alertas como leídas',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -129,13 +129,13 @@ export class AlertController {
     }
   }
 
-  async deleteAlert(req: Request, res: Response): Promise<Response> {
+  async deleteAlert(request: Request, response: Response): Promise<Response> {
     try {
-      const { id } = req.params;
-      const userId = req.user?.id;
+      const { id } = request.params;
+      const userId = request.user?.id;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
+        return response.status(400).json({
           success: false,
           message: 'ID de alerta inválido',
         });
@@ -144,13 +144,13 @@ export class AlertController {
       const alert = await Alert.findOneAndDelete({ _id: id, userId });
 
       if (!alert) {
-        return res.status(404).json({
+        return response.status(404).json({
           success: false,
           message: 'Alerta no encontrada',
         });
       }
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Alerta eliminada exitosamente',
         data: {
@@ -159,7 +159,7 @@ export class AlertController {
       });
     } catch (error) {
       console.error('Error al eliminar alerta:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al eliminar alerta',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -167,13 +167,13 @@ export class AlertController {
     }
   }
 
-  async getUnreadCount(req: Request, res: Response): Promise<Response> {
+  async getUnreadCount(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       const count = await Alert.countDocuments({ userId, isRead: false });
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         data: {
           unreadCount: count,
@@ -181,7 +181,7 @@ export class AlertController {
       });
     } catch (error) {
       console.error('Error al obtener contador de alertas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al obtener contador de alertas',
         error: error instanceof Error ? error.message : 'Error desconocido',
@@ -189,19 +189,19 @@ export class AlertController {
     }
   }
 
-  async generateAlerts(req: Request, res: Response): Promise<Response> {
+  async generateAlerts(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = req.user?.id;
+      const userId = request.user?.id;
 
       await alertGenerator.runAllChecks(userId!);
 
-      return res.status(200).json({
+      return response.status(200).json({
         success: true,
         message: 'Alertas generadas exitosamente',
       });
     } catch (error) {
       console.error('Error al generar alertas:', error);
-      return res.status(500).json({
+      return response.status(500).json({
         success: false,
         message: 'Error al generar alertas',
         error: error instanceof Error ? error.message : 'Error desconocido',

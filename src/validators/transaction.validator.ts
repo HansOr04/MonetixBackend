@@ -38,10 +38,12 @@ export const createTransactionSchema = Joi.object({
 
   date: Joi.date()
     .iso()
+    .max('now')
     .optional()
     .messages({
       'date.base': 'La fecha debe ser válida',
       'date.format': 'La fecha debe estar en formato ISO',
+      'date.max': 'La fecha no puede ser futura',
     }),
 });
 
@@ -80,10 +82,12 @@ export const updateTransactionSchema = Joi.object({
 
   date: Joi.date()
     .iso()
+    .max('now')
     .optional()
     .messages({
       'date.base': 'La fecha debe ser válida',
       'date.format': 'La fecha debe estar en formato ISO',
+      'date.max': 'La fecha no puede ser futura',
     }),
 }).min(1).messages({
   'object.min': 'Debe proporcionar al menos un campo para actualizar',
