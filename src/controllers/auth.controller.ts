@@ -11,14 +11,14 @@ const getJwtSecret = (): Secret => {
   return secret as Secret;
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = request.body;
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      res.status(401).json({
+      response.status(401).json({
         success: false,
         message: 'Credenciales inválidas',
       });
@@ -28,7 +28,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
-      res.status(401).json({
+      response.status(401).json({
         success: false,
         message: 'Credenciales inválidas',
       });
@@ -36,15 +36,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign(
-      { 
-        userId: (user._id as Types.ObjectId).toString(), 
-        role: user.role 
+      {
+        userId: (user._id as Types.ObjectId).toString(),
+        role: user.role
       },
       getJwtSecret(),
       { expiresIn: '7d' }
     );
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       message: 'Login exitoso',
       data: {
@@ -59,21 +59,21 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al iniciar sesión',
     });
   }
 };
 
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (request: Request, response: Response): Promise<void> => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role } = request.body;
 
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      res.status(400).json({
+      response.status(400).json({
         success: false,
         message: 'El email ya está registrado',
       });
@@ -90,15 +90,15 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     await user.save();
 
     const token = jwt.sign(
-      { 
-        userId: (user._id as Types.ObjectId).toString(), 
-        role: user.role 
+      {
+        userId: (user._id as Types.ObjectId).toString(),
+        role: user.role
       },
       getJwtSecret(),
       { expiresIn: '7d' }
     );
 
-    res.status(201).json({
+    response.status(201).json({
       success: true,
       message: 'Usuario creado exitosamente',
       data: {
@@ -113,26 +113,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error('Error en registro:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al registrar usuario',
     });
   }
 };
 
-export const getCurrentUser = async (req: Request, res: Response): Promise<void> => {
+export const getCurrentUser = async (request: Request, response: Response): Promise<void> => {
   try {
-    const user = req.user;
+    const user = request.user;
 
     if (!user) {
-      res.status(401).json({
+      response.status(401).json({
         success: false,
         message: 'Usuario no autenticado',
       });
       return;
     }
 
-    res.status(200).json({
+    response.status(200).json({
       success: true,
       data: {
         user: {
@@ -145,7 +145,7 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
     });
   } catch (error) {
     console.error('Error al obtener usuario:', error);
-    res.status(500).json({
+    response.status(500).json({
       success: false,
       message: 'Error al obtener usuario',
     });

@@ -44,16 +44,16 @@ export class DataPreprocessor {
   static detectOutliers(values: number[]): number[] {
     if (values.length < 4) return [];
 
-    const sorted = [...values].sort((a, b) => a - b);
-    const q1Index = Math.floor(sorted.length * 0.25);
-    const q3Index = Math.floor(sorted.length * 0.75);
+    const sortedValues = [...values].sort((a, b) => a - b);
+    const q1Index = Math.floor(sortedValues.length * 0.25);
+    const q3Index = Math.floor(sortedValues.length * 0.75);
 
-    const q1 = sorted[q1Index];
-    const q3 = sorted[q3Index];
-    const iqr = q3 - q1;
+    const firstQuartile = sortedValues[q1Index];
+    const thirdQuartile = sortedValues[q3Index];
+    const interquartileRange = thirdQuartile - firstQuartile;
 
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
+    const lowerBound = firstQuartile - 1.5 * interquartileRange;
+    const upperBound = thirdQuartile + 1.5 * interquartileRange;
 
     const outlierIndices: number[] = [];
     values.forEach((value, index) => {
@@ -68,20 +68,20 @@ export class DataPreprocessor {
   static fillMissingDates(data: DataPoint[]): DataPoint[] {
     if (data.length === 0) return [];
 
-    const sorted = [...data].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const sortedData = [...data].sort((a, b) => a.date.getTime() - b.date.getTime());
     const result: DataPoint[] = [];
 
-    for (let i = 0; i < sorted.length - 1; i++) {
-      result.push(sorted[i]);
+    for (let i = 0; i < sortedData.length - 1; i++) {
+      result.push(sortedData[i]);
 
-      const currentDate = new Date(sorted[i].date);
-      const nextDate = new Date(sorted[i + 1].date);
-      const daysDiff = Math.floor((nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+      const currentDate = new Date(sortedData[i].date);
+      const nextDate = new Date(sortedData[i + 1].date);
+      const daysDifference = Math.floor((nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      if (daysDiff > 1) {
-        const interpolatedValue = (sorted[i].value + sorted[i + 1].value) / 2;
+      if (daysDifference > 1) {
+        const interpolatedValue = (sortedData[i].value + sortedData[i + 1].value) / 2;
 
-        for (let j = 1; j < daysDiff; j++) {
+        for (let j = 1; j < daysDifference; j++) {
           const newDate = new Date(currentDate);
           newDate.setDate(newDate.getDate() + j);
           result.push({
@@ -92,7 +92,7 @@ export class DataPreprocessor {
       }
     }
 
-    result.push(sorted[sorted.length - 1]);
+    result.push(sortedData[sortedData.length - 1]);
     return result;
   }
 
@@ -102,7 +102,7 @@ export class DataPreprocessor {
   ): DataPoint[] {
     if (data.length === 0) return [];
 
-    const groups = new Map<string, number[]>();
+    const groupedData = new Map<string, number[]>();
 
     data.forEach(point => {
       let key: string;
@@ -121,16 +121,16 @@ export class DataPreprocessor {
           break;
       }
 
-      if (!groups.has(key)) {
-        groups.set(key, []);
+      if (!groupedData.has(key)) {
+        groupedData.set(key, []);
       }
-      groups.get(key)!.push(point.value);
+      groupedData.get(key)!.push(point.value);
     });
 
     const result: DataPoint[] = [];
-    groups.forEach((values, key) => {
-      const sum = values.reduce((acc, val) => acc + val, 0);
-      const avg = sum / values.length;
+    groupedData.forEach((values, key) => {
+      const sum = values.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
+      const average = sum / values.length;
 
       let date: Date;
       const parts = key.split('-');
@@ -146,17 +146,17 @@ export class DataPreprocessor {
         date = new Date(year, month, day);
       }
 
-      result.push({ date, value: avg });
+      result.push({ date, value: average });
     });
 
     return result.sort((a, b) => a.date.getTime() - b.date.getTime());
   }
 
   static toTimeSeries(data: DataPoint[]): TimeSeriesData {
-    const sorted = [...data].sort((a, b) => a.date.getTime() - b.date.getTime());
+    const sortedData = [...data].sort((a, b) => a.date.getTime() - b.date.getTime());
     return {
-      dates: sorted.map(point => point.date),
-      values: sorted.map(point => point.value),
+      dates: sortedData.map(point => point.date),
+      values: sortedData.map(point => point.value),
     };
   }
 
@@ -169,12 +169,12 @@ export class DataPreprocessor {
   }
 
   private static getDateFromWeek(year: number, week: number): Date {
-    const simple = new Date(year, 0, 1 + (week - 1) * 7);
-    const dow = simple.getDay();
-    const ISOweekStart = simple;
-    if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-    else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-    return ISOweekStart;
+    const simpleDate = new Date(year, 0, 1 + (week - 1) * 7);
+    const dayOfWeek = simpleDate.getDay();
+    const isoWeekStart = simpleDate;
+    if (dayOfWeek <= 4) isoWeekStart.setDate(simpleDate.getDate() - simpleDate.getDay() + 1);
+    else isoWeekStart.setDate(simpleDate.getDate() + 8 - simpleDate.getDay());
+    return isoWeekStart;
   }
 
   static removeOutliers(data: DataPoint[]): DataPoint[] {

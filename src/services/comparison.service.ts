@@ -7,89 +7,144 @@ import mongoose from 'mongoose';
  */
 export class ComparisonService {
     /**
-     * Compara predicciones entre diferentes categorías para un usuario
+     * Compara una categoría específica entre el período actual y el anterior
      */
-    async compareByCategory(userId: string, periods: number = 6): Promise<any> {
-        const transactions = await Transaction.find({ userId }).lean();
+    async compareByCategory(userId: string, categoryId: string): Promise<any> {
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-        // Agrupar por categoría
-        const categoriesMap = new Map<string, any[]>();
-        transactions.forEach(t => {
-            const catId = t.categoryId?.toString() || 'sin_categoria';
-            if (!categoriesMap.has(catId)) {
-                categoriesMap.set(catId, []);
-            }
-            categoriesMap.get(catId)!.push(t);
+        const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+        // Fetch category details
+        const { Category } = await import('../models/Category.model');
+        const category = await Category.findById(categoryId).lean();
+
+        // Fetch transactions for current period
+        const currentTransactions = await Transaction.find({
+            userId,
+            categoryId,
+            date: { $gte: currentMonthStart, $lte: currentMonthEnd }
+        }).lean();
+
+        // Fetch transactions for previous period
+        const previousTransactions = await Transaction.find({
+            userId,
+            categoryId,
+            date: { $gte: previousMonthStart, $lte: previousMonthEnd }
+        }).lean();
+
+        const calculateStats = (transactions: any[]) => ({
+            total: transactions.reduce((sum, t) => sum + t.amount, 0),
+            count: transactions.length
         });
 
-        const comparisons: any[] = [];
+        const currentStats = calculateStats(currentTransactions);
+        const previousStats = calculateStats(previousTransactions);
 
-        for (const [categoryId, categoryTransactions] of categoriesMap.entries()) {
-            const totalAmount = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
-            const avgAmount = totalAmount / categoryTransactions.length;
-            const transactionCount = categoryTransactions.length;
-
-            comparisons.push({
-                categoryId,
-                categoryName: categoryTransactions[0]?.category || 'Sin categoría',
-                totalAmount,
-                avgAmount,
-                transactionCount,
-                percentage: 0 // Se calculará después
-            });
-        }
-
-        // Calcular porcentajes
-        const grandTotal = comparisons.reduce((sum, c) => sum + c.totalAmount, 0);
-        comparisons.forEach(c => {
-            c.percentage = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0;
-        });
-
-        // Ordenar por total descendente
-        comparisons.sort((a, b) => b.totalAmount - a.totalAmount);
+        const difference = currentStats.total - previousStats.total;
+        const percentageChange = previousStats.total !== 0
+            ? ((currentStats.total - previousStats.total) / previousStats.total) * 100
+            : 0;
 
         return {
             userId,
-            comparisonType: 'by_category',
-            totalCategories: comparisons.length,
-            grandTotal,
-            categories: comparisons,
+            category: category || { name: 'Categoría desconocida' },
+            currentPeriod: {
+                ...currentStats,
+                startDate: currentMonthStart,
+                endDate: currentMonthEnd
+            },
+            previousPeriod: {
+                ...previousStats,
+                startDate: previousMonthStart,
+                endDate: previousMonthEnd
+            },
+            comparison: {
+                difference,
+                percentageChange,
+                trend: difference > 0 ? 'increasing' : difference < 0 ? 'decreasing' : 'stable'
+            },
             generatedAt: new Date()
         };
     }
 
     /**
-     * Compara predicciones generadas en diferentes momentos
+     * Compara datos financieros a lo largo del tiempo
      */
-    async compareByTime(userId: string, limit: number = 5): Promise<any> {
-        const predictions = await Prediction.find({ userId })
-            .sort({ generatedAt: -1 })
-            .limit(limit)
-            .lean();
+    async compareByTime(userId: string, period: 'month' | 'quarter' | 'year' = 'month'): Promise<any> {
+        const transactions = await Transaction.find({ userId }).sort({ date: 1 }).lean();
 
-        const comparisons = predictions.map(pred => {
-            const avgPrediction = pred.predictions.reduce((sum, p) => sum + p.amount, 0) / pred.predictions.length;
-            const firstPrediction = pred.predictions[0]?.amount || 0;
-            const lastPrediction = pred.predictions[pred.predictions.length - 1]?.amount || 0;
-            const trend = lastPrediction > firstPrediction ? 'creciente' : 'decreciente';
+        const periodsMap = new Map<string, { income: number; expense: number; count: number }>();
 
-            return {
-                predictionId: pred._id,
-                generatedAt: pred.generatedAt,
-                confidence: pred.confidence,
-                avgPredictedAmount: avgPrediction,
-                firstPeriodAmount: firstPrediction,
-                lastPeriodAmount: lastPrediction,
-                trend,
-                periodsCount: pred.predictions.length
-            };
+        transactions.forEach(t => {
+            const date = new Date(t.date);
+            let key = '';
+
+            if (period === 'month') {
+                // Format: YYYY-MM
+                const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+            } else if (period === 'quarter') {
+                const quarter = Math.floor(date.getMonth() / 3) + 1;
+                key = `Q${quarter} ${date.getFullYear()}`;
+            } else {
+                key = `${date.getFullYear()}`;
+            }
+
+            if (!periodsMap.has(key)) {
+                periodsMap.set(key, { income: 0, expense: 0, count: 0 });
+            }
+
+            const entry = periodsMap.get(key)!;
+            if (t.type === 'income') {
+                entry.income += t.amount;
+            } else {
+                entry.expense += t.amount;
+            }
+            entry.count++;
         });
+
+        // Convert map to array. Note: Sorting by string key might not be chronological if using names.
+        // Better to sort by date logic, but for simplicity let's rely on insertion order if transactions are sorted?
+        // No, map iteration order is insertion order. Transactions are sorted by date.
+        // So if we process sorted transactions, keys will be created in chronological order.
+
+        const periods = Array.from(periodsMap.entries()).map(([key, data]) => ({
+            period: key,
+            income: data.income,
+            expense: data.expense,
+            balance: data.income - data.expense,
+            count: data.count
+        }));
+
+        // Calculate comparison between last two periods
+        let comparison = {
+            incomeChange: 0,
+            expenseChange: 0,
+            balanceChange: 0
+        };
+
+        if (periods.length >= 2) {
+            const current = periods[periods.length - 1];
+            const previous = periods[periods.length - 2];
+
+            const calcChange = (curr: number, prev: number) => prev !== 0 ? ((curr - prev) / prev) * 100 : 0;
+
+            comparison = {
+                incomeChange: calcChange(current.income, previous.income),
+                expenseChange: calcChange(current.expense, previous.expense),
+                balanceChange: calcChange(current.balance, previous.balance)
+            };
+        }
 
         return {
             userId,
             comparisonType: 'temporal',
-            totalPredictions: comparisons.length,
-            predictions: comparisons,
+            periodType: period,
+            periods,
+            comparison,
             generatedAt: new Date()
         };
     }
@@ -244,6 +299,84 @@ export class ComparisonService {
             periodOptions,
             comparisons,
             generatedAt: new Date()
+        };
+    }
+    /**
+     * Compara dos categorías específicas en un período de tiempo
+     */
+    async compareCategories(userId: string, categoryAId: string, categoryBId: string, period: 'month' | 'quarter' | 'year' = 'month'): Promise<any> {
+        const now = new Date();
+        let startDate = new Date();
+        let endDate = new Date();
+
+        // Determinar rango de fechas
+        if (period === 'month') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        } else if (period === 'quarter') {
+            startDate = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        } else if (period === 'year') {
+            startDate = new Date(now.getFullYear(), 0, 1);
+            endDate = new Date(now.getFullYear(), 11, 31);
+        }
+
+        // Obtener transacciones para ambas categorías
+        const transactionsA = await Transaction.find({
+            userId,
+            categoryId: categoryAId,
+            date: { $gte: startDate, $lte: endDate }
+        }).populate('categoryId', 'name icon color').lean();
+
+        const transactionsB = await Transaction.find({
+            userId,
+            categoryId: categoryBId,
+            date: { $gte: startDate, $lte: endDate }
+        }).populate('categoryId', 'name icon color').lean();
+
+        // Calcular métricas para Categoría A
+        const totalA = transactionsA.reduce((sum, t) => sum + t.amount, 0);
+        const countA = transactionsA.length;
+        const avgA = countA > 0 ? totalA / countA : 0;
+        const categoryA = transactionsA[0]?.categoryId || { name: 'Categoría A' };
+
+        // Calcular métricas para Categoría B
+        const totalB = transactionsB.reduce((sum, t) => sum + t.amount, 0);
+        const countB = transactionsB.length;
+        const avgB = countB > 0 ? totalB / countB : 0;
+        const categoryB = transactionsB[0]?.categoryId || { name: 'Categoría B' };
+
+        // Calcular diferencias
+        const diffTotal = totalA - totalB;
+        const diffPercentage = totalB > 0 ? ((totalA - totalB) / totalB) * 100 : 0;
+
+        return {
+            period,
+            startDate,
+            endDate,
+            categoryA: {
+                id: categoryAId,
+                name: (categoryA as any).name,
+                icon: (categoryA as any).icon,
+                color: (categoryA as any).color,
+                total: totalA,
+                count: countA,
+                average: avgA
+            },
+            categoryB: {
+                id: categoryBId,
+                name: (categoryB as any).name,
+                icon: (categoryB as any).icon,
+                color: (categoryB as any).color,
+                total: totalB,
+                count: countB,
+                average: avgB
+            },
+            comparison: {
+                difference: diffTotal,
+                percentageDifference: diffPercentage,
+                higherCategory: totalA > totalB ? 'A' : totalB > totalA ? 'B' : 'equal'
+            }
         };
     }
 }

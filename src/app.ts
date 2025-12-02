@@ -20,13 +20,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Log simple de peticiones
-app.use((req: Request, res: Response, next: NextFunction) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+app.use((request: Request, response: Response, next: NextFunction) => {
+  console.log(`[${new Date().toISOString()}] ${request.method} ${request.url}`);
   next();
 });
 
-app.get('/', (req: Request, res: Response) => {
-  res.json({
+app.get('/', (request: Request, response: Response) => {
+  response.json({
     success: true,
     message: 'API de Monetix funcionando correctamente',
     version: '1.0.0',
@@ -55,16 +55,16 @@ app.use('/api/predictions', predictionRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/comparisons', comparisonRoutes);
 
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
+app.use((request: Request, response: Response) => {
+  response.status(404).json({
     success: false,
     message: 'Ruta no encontrada',
   });
 });
 
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, request: Request, response: Response, next: NextFunction) => {
   console.error('Error:', err);
-  res.status(500).json({
+  response.status(500).json({
     success: false,
     message: 'Error interno del servidor',
   });
