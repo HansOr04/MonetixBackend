@@ -1,6 +1,8 @@
+import 'reflect-metadata';
 import dotenv from 'dotenv';
 import app from './app';
 import { connectToDatabase } from './config/database';
+import { container } from './config/container';
 
 dotenv.config();
 
