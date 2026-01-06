@@ -1,9 +1,16 @@
+import { injectable, inject } from 'inversify';
 import { Request, Response } from 'express';
 import { Alert } from '../models/Alert.model';
-import { alertGenerator } from '../core/alertGenerator';
+import { AlertOrchestrator } from '../core/alerts/AlertOrchestrator';
+import { AlertType } from '../core/alerts/interfaces/IAlertChecker';
 import mongoose from 'mongoose';
 
+@injectable()
 export class AlertController {
+  constructor(
+    @inject(Symbol.for('AlertOrchestrator')) private alertOrchestrator: AlertOrchestrator
+  ) {}
+
   async getAlerts(request: Request, response: Response): Promise<Response> {
     try {
       const userId = request.user?.id;
@@ -22,12 +29,7 @@ export class AlertController {
         total: alerts.length,
       });
     } catch (error) {
-      console.error('Error al obtener alertas:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener alertas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener alertas');
     }
   }
 
@@ -57,12 +59,7 @@ export class AlertController {
         data: alert,
       });
     } catch (error) {
-      console.error('Error al obtener alerta:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener alerta',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener alerta');
     }
   }
 
@@ -97,12 +94,7 @@ export class AlertController {
         data: alert,
       });
     } catch (error) {
-      console.error('Error al marcar alerta como leída:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al marcar alerta como leída',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al marcar alerta como leída');
     }
   }
 
@@ -120,12 +112,7 @@ export class AlertController {
         },
       });
     } catch (error) {
-      console.error('Error al marcar todas las alertas como leídas:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al marcar todas las alertas como leídas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al marcar todas las alertas como leídas');
     }
   }
 
@@ -158,12 +145,7 @@ export class AlertController {
         },
       });
     } catch (error) {
-      console.error('Error al eliminar alerta:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al eliminar alerta',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al eliminar alerta');
     }
   }
 
@@ -180,34 +162,75 @@ export class AlertController {
         },
       });
     } catch (error) {
-      console.error('Error al obtener contador de alertas:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener contador de alertas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener contador de alertas');
     }
   }
 
+  /**
+   * Generar alertas usando el nuevo AlertOrchestrator
+   * POST /api/v1/alerts/generate
+   */
   async generateAlerts(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
+      const { type } = request.query;
 
-      await alertGenerator.runAllChecks(userId!);
+      if (type) {
+        // Ejecutar checker específico
+        await this.alertOrchestrator.runSpecificCheck(userId, type as AlertType);
+
+        return response.status(200).json({
+          success: true,
+          message: `Alertas de tipo "${type}" generadas exitosamente`,
+        });
+      } else {
+        // Ejecutar todos los checkers
+        await this.alertOrchestrator.runAllChecks(userId);
+
+        return response.status(200).json({
+          success: true,
+          message: 'Todas las alertas generadas exitosamente',
+        });
+      }
+    } catch (error) {
+      return this.handleError(error, response, 'Error al generar alertas');
+    }
+  }
+
+  /**
+   * Obtener tipos de alertas disponibles
+   * GET /api/v1/alerts/types
+   */
+  async getAvailableTypes(request: Request, response: Response): Promise<Response> {
+    try {
+      const types = this.alertOrchestrator.getAvailableTypes();
 
       return response.status(200).json({
         success: true,
-        message: 'Alertas generadas exitosamente',
+        data: types,
       });
     } catch (error) {
-      console.error('Error al generar alertas:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al generar alertas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener tipos de alertas');
     }
+  }
+
+  // ========== HELPER METHODS ==========
+
+  private handleError(error: unknown, response: Response, defaultMessage: string): Response {
+    console.error(defaultMessage, error);
+
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+
+    return response.status(500).json({
+      success: false,
+      message: defaultMessage,
+      error: message,
+    });
   }
 }
 
-export const alertController = new AlertController();
+// Exportar instancia desde contenedor
+import { container } from '../config/container';
+container.bind<AlertController>(Symbol.for('AlertController')).to(AlertController);
+
+export const alertController = container.get<AlertController>(Symbol.for('AlertController'));

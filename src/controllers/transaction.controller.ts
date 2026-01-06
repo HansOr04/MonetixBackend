@@ -1,92 +1,46 @@
+import { inject, injectable } from 'inversify';
 import { Request, Response } from 'express';
-import { Transaction } from '../models/Transaction.model';
-import { Category } from '../models/Category.model';
-import { Goal } from '../models/Goal.model';
-import { predictionEngine } from '../core/PredictionEngine';
-import mongoose from 'mongoose';
+import { ITransactionService } from '../services/interfaces/ITransactionService';
+import { ITransactionAnalyticsService } from '../services/interfaces/ITransactionAnalyticsService';
+import { TransactionFilter, PaginationOptions } from '../dtos/transaction.dto';
 
+@injectable()
 export class TransactionController {
+  constructor(
+    @inject(Symbol.for('ITransactionService')) private transactionService: ITransactionService,
+    @inject(Symbol.for('ITransactionAnalyticsService'))
+    private analyticsService: ITransactionAnalyticsService
+  ) {}
+
   async getTransactions(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
-      const {
-        type,
-        categoryId,
-        dateFrom,
-        dateTo,
-        minAmount,
-        maxAmount,
-        page = 1,
-        limit = 20,
-        sortBy = 'date',
-        sortOrder = 'desc',
-      } = request.query;
+      const userId = request.user?.id!;
 
-      const filter: any = { userId };
+      // Construir filtros desde query params
+      const filter: TransactionFilter = this.buildFilterFromQuery(request.query);
 
-      if (type) filter.type = type;
-      if (categoryId) filter.categoryId = categoryId;
+      // Construir opciones de paginación
+      const pagination: PaginationOptions = this.buildPaginationFromQuery(request.query);
 
-      if (dateFrom || dateTo) {
-        filter.date = {};
-        if (dateFrom) filter.date.$gte = new Date(dateFrom as string);
-        if (dateTo) filter.date.$lte = new Date(dateTo as string);
-      }
-
-      if (minAmount || maxAmount) {
-        filter.amount = {};
-        if (minAmount) filter.amount.$gte = parseFloat(minAmount as string);
-        if (maxAmount) filter.amount.$lte = parseFloat(maxAmount as string);
-      }
-
-      const skip = (Number(page) - 1) * Number(limit);
-      const sort: any = {};
-      sort[sortBy as string] = sortOrder === 'asc' ? 1 : -1;
-
-      const transactions = await Transaction.find(filter)
-        .sort(sort)
-        .skip(skip)
-        .limit(Number(limit))
-        .populate('categoryId', 'name type icon color')
-        .lean();
-
-      const total = await Transaction.countDocuments(filter);
+      // Usar servicio en lugar de acceso directo a modelo
+      const result = await this.transactionService.getTransactions(userId, filter, pagination);
 
       return response.status(200).json({
         success: true,
-        data: transactions,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit)),
-        },
+        data: result.data,
+        pagination: result.pagination,
       });
     } catch (error) {
-      console.error('Error al obtener transacciones:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener transacciones',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener transacciones');
     }
   }
 
   async getTransactionById(request: Request, response: Response): Promise<Response> {
     try {
       const { id } = request.params;
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
 
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        return response.status(400).json({
-          success: false,
-          message: 'ID de transacción inválido',
-        });
-      }
-
-      const transaction = await Transaction.findOne({ _id: id, userId })
-        .populate('categoryId', 'name type icon color')
-        .lean();
+      const transaction = await this.transactionService.getTransactionById(userId, id);
 
       if (!transaction) {
         return response.status(404).json({
@@ -100,104 +54,40 @@ export class TransactionController {
         data: transaction,
       });
     } catch (error) {
-      console.error('Error al obtener transacción:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener transacción',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener transacción');
     }
   }
 
   async createTransaction(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
       const { categoryId, amount, type, description, date } = request.body;
 
-      const category = await Category.findOne({
-        _id: categoryId,
-        $or: [{ isDefault: true }, { userId }],
-      });
-
-      if (!category) {
-        return response.status(404).json({
-          success: false,
-          message: 'Categoría no encontrada',
-        });
-      }
-
-      const transaction = new Transaction({
-        userId,
+      const transaction = await this.transactionService.createTransaction(userId, {
         categoryId,
         amount,
         type,
         description,
-        date: date || new Date(),
+        date: date ? new Date(date) : undefined,
       });
-
-      await transaction.save();
-
-      if (type === 'income') {
-        await Goal.updateMany(
-          { userId, status: 'active' },
-          { $inc: { currentAmount: amount } }
-        );
-      }
-
-      const populatedTransaction = await Transaction.findById(transaction._id)
-        .populate('categoryId', 'name type icon color')
-        .lean();
-
-      // Invalidate prediction cache
-      predictionEngine.invalidateCache(userId!);
 
       return response.status(201).json({
         success: true,
         message: 'Transacción creada exitosamente',
-        data: populatedTransaction,
+        data: transaction,
       });
     } catch (error) {
-      console.error('Error al crear transacción:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al crear transacción',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al crear transacción');
     }
   }
 
   async updateTransaction(request: Request, response: Response): Promise<Response> {
     try {
       const { id } = request.params;
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
       const updateData = request.body;
 
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        return response.status(400).json({
-          success: false,
-          message: 'ID de transacción inválido',
-        });
-      }
-
-      if (updateData.categoryId) {
-        const category = await Category.findOne({
-          _id: updateData.categoryId,
-          $or: [{ isDefault: true }, { userId }],
-        });
-
-        if (!category) {
-          return response.status(404).json({
-            success: false,
-            message: 'Categoría no encontrada',
-          });
-        }
-      }
-
-      const transaction = await Transaction.findOneAndUpdate(
-        { _id: id, userId },
-        updateData,
-        { new: true, runValidators: true }
-      ).populate('categoryId', 'name type icon color');
+      const transaction = await this.transactionService.updateTransaction(userId, id, updateData);
 
       if (!transaction) {
         return response.status(404).json({
@@ -205,9 +95,6 @@ export class TransactionController {
           message: 'Transacción no encontrada',
         });
       }
-
-      // Invalidate prediction cache
-      predictionEngine.invalidateCache(userId!);
 
       return response.status(200).json({
         success: true,
@@ -215,198 +102,132 @@ export class TransactionController {
         data: transaction,
       });
     } catch (error) {
-      console.error('Error al actualizar transacción:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al actualizar transacción',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al actualizar transacción');
     }
   }
 
   async deleteTransaction(request: Request, response: Response): Promise<Response> {
     try {
       const { id } = request.params;
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
 
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        return response.status(400).json({
-          success: false,
-          message: 'ID de transacción inválido',
-        });
-      }
-
-      const transaction = await Transaction.findOneAndDelete({ _id: id, userId });
-
-      if (!transaction) {
-        return response.status(404).json({
-          success: false,
-          message: 'Transacción no encontrada',
-        });
-      }
-
-      // Invalidate prediction cache
-      predictionEngine.invalidateCache(userId!);
+      const deletedInfo = await this.transactionService.deleteTransaction(userId, id);
 
       return response.status(200).json({
         success: true,
         message: 'Transacción eliminada exitosamente',
-        data: {
-          id: transaction._id,
-          amount: transaction.amount,
-          type: transaction.type,
-        },
+        data: deletedInfo,
       });
     } catch (error) {
-      console.error('Error al eliminar transacción:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al eliminar transacción',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al eliminar transacción');
     }
   }
 
   async getStatistics(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
 
-      const stats = await Transaction.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-        {
-          $group: {
-            _id: '$type',
-            total: { $sum: '$amount' },
-            count: { $sum: 1 },
-            avg: { $avg: '$amount' },
-          },
-        },
-      ]);
-
-      const incomeStats = stats.find(s => s._id === 'income') || { total: 0, count: 0, avg: 0 };
-      const expenseStats = stats.find(s => s._id === 'expense') || { total: 0, count: 0, avg: 0 };
+      const stats = await this.analyticsService.getStatistics(userId);
 
       return response.status(200).json({
         success: true,
-        data: {
-          income: {
-            total: incomeStats.total,
-            count: incomeStats.count,
-            average: incomeStats.avg,
-          },
-          expense: {
-            total: expenseStats.total,
-            count: expenseStats.count,
-            average: expenseStats.avg,
-          },
-          balance: incomeStats.total - expenseStats.total,
-          totalTransactions: incomeStats.count + expenseStats.count,
-        },
+        data: stats,
       });
     } catch (error) {
-      console.error('Error al obtener estadísticas:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener estadísticas',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener estadísticas');
     }
   }
 
   async getByCategory(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
 
-      const byCategory = await Transaction.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-        {
-          $group: {
-            _id: { categoryId: '$categoryId', type: '$type' },
-            total: { $sum: '$amount' },
-            count: { $sum: 1 },
-          },
-        },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: '_id.categoryId',
-            foreignField: '_id',
-            as: 'category',
-          },
-        },
-        { $unwind: '$category' },
-        {
-          $project: {
-            categoryId: '$_id.categoryId',
-            categoryName: '$category.name',
-            type: '$_id.type',
-            icon: '$category.icon',
-            color: '$category.color',
-            total: 1,
-            count: 1,
-          },
-        },
-        { $sort: { total: -1 } },
-      ]);
+      const byCategory = await this.analyticsService.getByCategory(userId);
 
       return response.status(200).json({
         success: true,
         data: byCategory,
       });
     } catch (error) {
-      console.error('Error al obtener transacciones por categoría:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener transacciones por categoría',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener transacciones por categoría');
     }
   }
 
   async getByPeriod(request: Request, response: Response): Promise<Response> {
     try {
-      const userId = request.user?.id;
+      const userId = request.user?.id!;
       const { period = 'month' } = request.query;
 
-      let groupBy: any;
-      switch (period) {
-        case 'day':
-          groupBy = { $dateToString: { format: '%Y-%m-%d', date: '$date' } };
-          break;
-        case 'week':
-          groupBy = { $isoWeek: '$date' };
-          break;
-        case 'month':
-        default:
-          groupBy = { $dateToString: { format: '%Y-%m', date: '$date' } };
-          break;
-      }
-
-      const byPeriod = await Transaction.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-        {
-          $group: {
-            _id: { period: groupBy, type: '$type' },
-            total: { $sum: '$amount' },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { '_id.period': 1 } },
-      ]);
+      const byPeriod = await this.analyticsService.getByPeriod(
+        userId,
+        period as 'day' | 'week' | 'month'
+      );
 
       return response.status(200).json({
         success: true,
         data: byPeriod,
       });
     } catch (error) {
-      console.error('Error al obtener transacciones por período:', error);
-      return response.status(500).json({
-        success: false,
-        message: 'Error al obtener transacciones por período',
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
+      return this.handleError(error, response, 'Error al obtener transacciones por período');
     }
+  }
+
+  // ========== HELPER METHODS ==========
+
+  private buildFilterFromQuery(query: any): TransactionFilter {
+    const filter: TransactionFilter = {};
+
+    if (query.type) {
+      filter.type = query.type as 'income' | 'expense';
+    }
+
+    if (query.categoryId) {
+      filter.categoryId = query.categoryId as string;
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      const dateRange: any = {};
+      if (query.dateFrom) dateRange.from = new Date(query.dateFrom as string);
+      if (query.dateTo) dateRange.to = new Date(query.dateTo as string);
+      filter.dateRange = dateRange;
+    }
+
+    if (query.minAmount || query.maxAmount) {
+      const amountRange: any = {};
+      if (query.minAmount) amountRange.min = parseFloat(query.minAmount as string);
+      if (query.maxAmount) amountRange.max = parseFloat(query.maxAmount as string);
+      filter.amountRange = amountRange;
+    }
+
+    return filter;
+  }
+
+  private buildPaginationFromQuery(query: any): PaginationOptions {
+    return {
+      page: query.page ? Number(query.page) : 1,
+      limit: query.limit ? Number(query.limit) : 20,
+      sortBy: (query.sortBy as string) || 'date',
+      sortOrder: (query.sortOrder as 'asc' | 'desc') || 'desc',
+    };
+  }
+
+  private handleError(error: unknown, response: Response, defaultMessage: string): Response {
+    console.error(defaultMessage, error);
+
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+
+    return response.status(500).json({
+      success: false,
+      message: defaultMessage,
+      error: message,
+    });
   }
 }
 
-export const transactionController = new TransactionController();
+// Exportar instancia desde contenedor
+import { container } from '../config/container';
+container.bind<TransactionController>(Symbol.for('TransactionController')).to(TransactionController);
+
+export const transactionController = container.get<TransactionController>(
+  Symbol.for('TransactionController')
+);
