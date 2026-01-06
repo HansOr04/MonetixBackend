@@ -231,3 +231,30 @@ Para preguntas o soporte, por favor abre un issue en el repositorio del proyecto
 ---
 
 Desarrollado con Node.js, Express y TypeScript
+
+## Arquitectura y Patrones de Diseño
+
+El proyecto sigue una arquitectura limpia y modular, implementando varios patrones de diseño y principios SOLID para asegurar escalabilidad y mantenibilidad.
+
+### Patrones de Diseño Utilizados
+
+1.  **Repository Pattern**:
+    *   **Uso**: Se utiliza para abstraer la lógica de acceso a datos. Los controladores y servicios no interactúan directamente con los modelos de Mongoose, sino a través de repositorios (`src/repositories`).
+    *   **Beneficio**: Permite cambiar la implementación de la base de datos sin afectar a la lógica de negocio y facilita las pruebas unitarias al poder mockear la capa de datos.
+
+2.  **Dependency Injection (Inyección de Dependencias)**:
+    *   **Uso**: Implementado a través de la librería `inversify`. Las dependencias (como repositorios o servicios) se inyectan en las clases que las necesitan en lugar de instanciarse directamente dentro de ellas.
+    *   **Beneficio**: Reduce el acoplamiento entre clases y mejora la testabilidad y modularidad del código.
+
+### Principios SOLID Aplicados
+
+1.  **Single Responsibility Principle (SRP - Principio de Responsabilidad Única)**:
+    *   **Aplicación**: Cada clase tiene una única responsabilidad.
+        *   **Controladores**: Manejan solo la entrada/salida HTTP.
+        *   **Servicios**: Contienen la lógica de negocio pura.
+        *   **Repositorios**: Se encargan de las consultas a la base de datos.
+    *   **Beneficio**: Hace que el código sea más fácil de entender, mantener y modificar.
+
+2.  **Dependency Inversion Principle (DIP - Principio de Inversión de Dependencias)**:
+    *   **Aplicación**: Los módulos de alto nivel (Servicios/Controladores) no dependen de módulos de bajo nivel (Implementaciones concretas de Repositorios), sino de abstracciones (Interfaces).
+    *   **Beneficio**: Permite desacoplar la lógica de negocio de los detalles de implementación (como la base de datos específica), facilitando cambios futuros y la escalabilidad.
