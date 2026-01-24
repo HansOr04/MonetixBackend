@@ -73,84 +73,6 @@ predictionEngine.predict(userId, 'linear_regression', 6)
 - Garantiza que solo exista **UNA instancia** de la clase
 - Proporciona un punto de acceso global
 
-**Analogía:**
-```
-Singleton = Presidente de un país
-- Solo puede haber UNO a la vez
-- Todos acceden al mismo presidente
-- No se pueden crear presidentes adicionales
-```
-
-### Líneas 8-10: Propiedades Privadas
-
-```typescript
-private static instance: PredictionEngine;
-private cache: Map<string, { data: any; timestamp: number }> = new Map();
-private readonly CACHE_TTL = 24 * 60 * 60 * 1000;
-```
-
-**Línea 8: Instancia única**
-```typescript
-private static instance: PredictionEngine;
-```
-- **`private`**: No se puede acceder desde fuera
-- **`static`**: Pertenece a la clase, no a instancias
-- Almacena la única instancia del motor
-
-**Línea 9: Caché en memoria**
-```typescript
-private cache: Map<string, { data: any; timestamp: number }> = new Map();
-```
-- **Map**: Estructura clave-valor
-- **Clave**: `userId-modelType-periods` (ej: `"507f-linear_regression-6"`)
-- **Valor**: `{ data: predicciones, timestamp: cuándo se guardó }`
-
-**¿Por qué usar caché?**
-```
-Sin caché:
-Usuario pide predicción → Procesar 1000 transacciones → 5 segundos
-
-Con caché:
-Usuario pide predicción → Leer de memoria → 0.001 segundos ⚡
-```
-
-**Línea 10: Tiempo de vida del caché**
-```typescript
-private readonly CACHE_TTL = 24 * 60 * 60 * 1000;
-```
-- **TTL**: Time To Live (tiempo de vida)
-- **Cálculo**: 24 horas * 60 minutos * 60 segundos * 1000 milisegundos
-- **Resultado**: 86,400,000 ms = 24 horas
-
-**¿Por qué 24 horas?**
-- Predicciones válidas por un día
-- Después de 24h, datos pueden haber cambiado
-- Balance entre performance y frescura de datos
-
----
-
-### Línea 12: Constructor Privado
-
-```typescript
-private constructor() { }
-```
-
-**¿Por qué privado?**
-```javascript
-// ❌ No se puede hacer esto:
-const engine = new PredictionEngine();
-// Error: Constructor is private
-
-// ✅ Solo se puede obtener así:
-const engine = PredictionEngine.getInstance();
-```
-
-**Propósito:**
-- Previene crear múltiples instancias
-- Fuerza uso de `getInstance()`
-
----
-
 ### Líneas 14-19: getInstance()
 
 ```typescript
@@ -167,18 +89,20 @@ static getInstance(): PredictionEngine {
 - Si ya existe, retorna la existente
 - Garantiza una sola instancia
 
-**Flujo:**
-```javascript
-// Primera llamada
-const engine1 = PredictionEngine.getInstance();
-// instance no existe → crea nueva instancia
+---
 
-// Segunda llamada
-const engine2 = PredictionEngine.getInstance();
-// instance ya existe → retorna la misma
+## 🤖 INTEGRACIÓN CON IA (Nuevo)
 
-engine1 === engine2  // true ✅ (misma instancia)
-```
+El `PredictionEngine` ahora colabora con `GeminiService` para enriquecer las predicciones con inteligencia artificial generativa.
+
+### Flujo de Alertas IA:
+
+1.  **Extracción de Datos**: `PredictionEngine` toma los datos mensuales procesados.
+2.  **Consulta a Gemini**: Llama a `geminiService.generateFinancialAlerts(monthlyData)`.
+3.  **Generación**: La IA analiza tendencias (gastos altos, ahorros bajos) y escribe consejos en lenguaje natural.
+4.  **Persistencia**: Las recomendaciones se guardan en la colección `Alerts` de MongoDB con tipo `recommendation`.
+
+Esto transforma una predicción numérica simple en un asesoramiento accionable.
 
 ---
 

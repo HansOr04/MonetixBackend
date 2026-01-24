@@ -24,6 +24,7 @@ export interface IPrediction extends Document {
   modelType: 'linear_regression';
   type: 'income' | 'expense' | 'net';
   predictions: IPredictionPoint[];
+  alerts: string[];
   confidence: number;
   metadata: IModelMetadata;
   generatedAt: Date;
@@ -101,6 +102,10 @@ const predictionSchema = new Schema<IPrediction>(
       type: Date,
       default: Date.now,
       index: true,
+    },
+    alerts: {
+      type: [String],
+      default: [],
     },
     expiresAt: {
       type: Date,

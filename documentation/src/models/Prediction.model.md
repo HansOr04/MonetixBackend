@@ -241,6 +241,7 @@ export interface IPrediction extends Document {
   userId: mongoose.Types.ObjectId;
   modelType: 'linear_regression';
   predictions: IPredictionPoint[];
+  alerts: string[]; // <-- Nuevo campo para alertas IA
   confidence: number;
   metadata: IModelMetadata;
   generatedAt: Date;
@@ -791,6 +792,10 @@ expiresAt: {
   type: Date,
   required: true,
   index: true,
+},
+alerts: {
+  type: [String],
+  default: [],
 },
 ```
 
