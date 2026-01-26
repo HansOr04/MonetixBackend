@@ -11,6 +11,7 @@ Monetix Backend es una API RESTful robusta que proporciona servicios de autentic
 - **Autenticación y Autorización**: Sistema completo de registro, inicio de sesión y gestión de tokens JWT
 - **Gestión de Usuarios**: CRUD completo de usuarios con diferentes roles (usuario/administrador)
 - **Validación de Datos**: Validación de esquemas usando Joi
+- **Alertas Financieras con IA**: Generación de recomendaciones personalizadas utilizando Google Gemini AI
 - **Seguridad**: Encriptación de contraseñas con bcrypt, protección de rutas mediante middlewares
 - **Base de Datos**: MongoDB con Mongoose ODM
 - **TypeScript**: Código fuertemente tipado para mayor robustez y mantenibilidad
@@ -25,6 +26,7 @@ Monetix Backend es una API RESTful robusta que proporciona servicios de autentic
 - **Autenticación**: JSON Web Tokens (JWT)
 - **Seguridad**: bcryptjs para hash de contraseñas
 - **Validación**: Joi para validación de esquemas
+- **IA Generativa**: Google Gemini API (@google/generative-ai)
 - **Desarrollo**: ts-node-dev para hot-reloading
 
 ## Requisitos Previos
@@ -70,6 +72,9 @@ CORS_ORIGIN=http://localhost:5173
 
 # Entorno
 NODE_ENV=development
+
+# Clave API de Google Gemini (Requerido para alertas IA)
+GEMINI_API_KEY=tu_clave_api_de_gemini
 ```
 
 ## Uso
@@ -166,6 +171,7 @@ El proyecto implementa las siguientes medidas de seguridad:
 | `JWT_SECRET` | Clave secreta para JWT | Sí | - |
 | `CORS_ORIGIN` | Origen permitido para CORS | No | http://localhost:5173 |
 | `NODE_ENV` | Entorno de ejecución | No | development |
+| `GEMINI_API_KEY` | Clave API de Google Gemini | Sí (para alertas) | - |
 
 ## Desarrollo
 

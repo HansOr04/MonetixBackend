@@ -131,6 +131,8 @@ type: 'overspending' | 'goal_progress' | 'unusual_pattern' | 'recommendation';
   type: 'recommendation',
   message: 'Tu tasa de ahorro es del 5%. Se recomienda ahorrar al menos el 20%'
 }
+// Generado por: rules-based engine O Gemini AI
+```
 ```
 
 ---

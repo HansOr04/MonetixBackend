@@ -3,6 +3,8 @@ import { Prediction } from '../models/Prediction.model';
 import { DataPreprocessor, DataPoint } from './utils/dataPreprocessor';
 import { LinearRegressionModel } from './models/LinearRegression';
 import { IPredictionModel, TimeSeriesData } from './interfaces/PredictionModel';
+import { geminiService } from '../services/GeminiService';
+import { Alert } from '../models/Alert.model';
 
 export class PredictionEngine {
   private static instance: PredictionEngine;
@@ -59,6 +61,15 @@ export class PredictionEngine {
     const confidence = model.getConfidence();
     const metadata = model.getMetadata();
 
+    // Generate AI Alerts
+    const alerts = await geminiService.generateFinancialAlerts(
+      cleanedData.map(d => ({
+        month: `${d.date.getFullYear()}-${d.date.getMonth() + 1}`,
+        amount: d.value,
+        type: type || 'net'
+      }))
+    );
+
     const predictionDoc = new Prediction({
       userId,
       modelType,
@@ -71,6 +82,7 @@ export class PredictionEngine {
       })),
       confidence,
       metadata,
+      alerts,
       generatedAt: new Date(),
       expiresAt: new Date(Date.now() + this.CACHE_TTL),
     });
@@ -86,7 +98,33 @@ export class PredictionEngine {
       confidence: predictionDoc.confidence,
       metadata: predictionDoc.metadata,
       generatedAt: predictionDoc.generatedAt,
+      alerts: predictionDoc.alerts,
     };
+
+    // Save alerts to the Alert collection for the notification system
+    if (alerts && alerts.length > 0) {
+      const alertPromises = alerts.map(async (alertMsg) => {
+        try {
+          await Alert.create({
+            userId,
+            type: 'recommendation',
+            severity: 'info',
+            message: alertMsg,
+            isRead: false,
+            relatedData: {
+              predictionId: predictionDoc._id,
+              modelType,
+              generatedAt: new Date()
+            }
+          });
+        } catch (err) {
+          console.error('Error saving individual alert:', err);
+        }
+      });
+      // We don't await this to avoid blocking the response, or we can await if we want to ensure consistency
+      // Given the user feedback "no me llega", awaiting is safer to ensure they exist when the frontend calls GET /alerts
+      await Promise.all(alertPromises);
+    }
 
     this.setCache(cacheKey, result);
     return result;

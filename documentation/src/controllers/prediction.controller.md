@@ -61,7 +61,8 @@ Predicciones Generadas
 4. Entrena el modelo con datos históricos
 5. Genera predicciones para períodos futuros
 6. Calcula métricas de confianza
-7. Guarda la predicción en la base de datos
+7. Generar alertas con IA (Gemini)
+8. Guarda la predicción en la base de datos
 
 **Ejemplo de uso interno:**
 ```typescript
@@ -83,12 +84,21 @@ class PredictionEngine {
     // 5. Generar predicciones
     const predictions = model.predict(periods);
     
-    // 6. Guardar en BD
+    // 6. Calcular métricas de confianza
+    const metrics = model.getMetrics(); // Assuming getMetrics() returns metrics
+
+    // 7. Generar alertas con IA (GeminiService)
+    const aiAlerts = await geminiService.generateFinancialAlerts(processedData);
+
+    // 8. Guardar en BD
     const savedPrediction = await Prediction.create({
       userId,
       modelType,
+      periods,
       predictions,
-      confidence: model.getConfidence()
+      alerts: aiAlerts, // <-- Guardar alertas en la predicción
+      metrics,
+      generatedAt: new Date()
     });
     
     return savedPrediction;
